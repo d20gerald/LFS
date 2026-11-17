@@ -30,6 +30,10 @@ function mention(userId: string): string {
   return `<@${userId}>`;
 }
 
+function channelMention(channelId: string): string {
+  return `<#${channelId}>`;
+}
+
 function discordRelative(unixMs: number): string {
   return `<t:${Math.floor(unixMs / 1000)}:R>`;
 }
@@ -88,6 +92,10 @@ export function buildLobbyEmbed(lobby: Lobby): APIEmbed {
     embed.addFields({ name: "Notes from the host", value: lobby.notes });
   }
 
+  if (isActive(lobby) && lobby.voiceChannelId) {
+    embed.addFields({ name: "Voice chat", value: `${channelMention(lobby.voiceChannelId)} (crew only)` });
+  }
+
   return embed.toJSON();
 }
 
@@ -126,14 +134,22 @@ export function renderServerDetails(lobby: Lobby): string {
     "",
     "In Sol Mates: **Play → Join**, enter the name (and password), and you're aboard. You can drop in mid-mission.",
     `Host: ${mention(lobby.hostId)}. ${vibeLabel(lobby.vibe)} · ${juiceLabel(lobby.juice)} · ${regionLabel(lobby.region)}`,
+    lobby.voiceChannelId ? `Voice chat: ${channelMention(lobby.voiceChannelId)} (crew only).` : "",
   ];
-  return lines.join("\n");
+  return lines.filter((line, i) => line.length > 0 || i === 2).join("\n");
+}
+
+/** The public note when a crew's voice room opens (first crewmate aboard). */
+export function renderVoiceRoomOpenedMessage(lobby: Lobby): { content: string; userIds: string[] } {
+  const content = `${mention(lobby.hostId)} comms are open: ${channelMention(lobby.voiceChannelId ?? "")} is your crew's private voice room. It closes with the lobby.`;
+  return { content, userIds: [lobby.hostId] };
 }
 
 /** The channel ping sent to the host when the last seat fills. */
 export function renderCrewCompleteMessage(lobby: Lobby): { content: string; userIds: string[] } {
   const crew = lobby.players.slice(1).map(mention).join(", ");
-  const content = `${mention(lobby.hostId)} your crew is complete: ${crew}. Everyone has the server details. Launch when ready! 🚀`;
+  const voice = lobby.voiceChannelId ? ` Comms are open in ${channelMention(lobby.voiceChannelId)}.` : "";
+  const content = `${mention(lobby.hostId)} your crew is complete: ${crew}. Everyone has the server details.${voice} Launch when ready! 🚀`;
   return { content, userIds: [...lobby.players] };
 }
 

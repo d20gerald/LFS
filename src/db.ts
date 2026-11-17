@@ -23,6 +23,7 @@ interface LobbyRow {
   created_at: number;
   expires_at: number;
   closed_at: number | null;
+  voice_channel_id: string | null;
 }
 
 const SCHEMA = `
@@ -42,7 +43,8 @@ CREATE TABLE IF NOT EXISTS lobbies (
   status TEXT NOT NULL,
   created_at INTEGER NOT NULL,
   expires_at INTEGER NOT NULL,
-  closed_at INTEGER
+  closed_at INTEGER,
+  voice_channel_id TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_lobbies_status ON lobbies(status);
 CREATE INDEX IF NOT EXISTS idx_lobbies_guild ON lobbies(guild_id, status);
@@ -65,6 +67,17 @@ export class LobbyStore {
     this.db = new DatabaseSync(path);
     this.db.exec("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;");
     this.db.exec(SCHEMA);
+    this.migrate();
+  }
+
+  /** Additive migrations for databases created before a column existed. */
+  private migrate(): void {
+    const columns = (this.db.prepare("PRAGMA table_info(lobbies)").all() as unknown as Array<{ name: string }>).map(
+      (c) => c.name,
+    );
+    if (!columns.includes("voice_channel_id")) {
+      this.db.exec("ALTER TABLE lobbies ADD COLUMN voice_channel_id TEXT");
+    }
   }
 
   close(): void {
@@ -128,6 +141,10 @@ export class LobbyStore {
 
   setMessageId(id: number, messageId: string): void {
     this.db.prepare("UPDATE lobbies SET message_id = ? WHERE id = ?").run(messageId, id);
+  }
+
+  setVoiceChannelId(id: number, voiceChannelId: string | null): void {
+    this.db.prepare("UPDATE lobbies SET voice_channel_id = ? WHERE id = ?").run(voiceChannelId, id);
   }
 
   /** Persist player list and status from an updated Lobby value. */
@@ -195,6 +212,7 @@ export class LobbyStore {
       createdAt: row.created_at,
       expiresAt: row.expires_at,
       closedAt: row.closed_at,
+      voiceChannelId: row.voice_channel_id ?? null,
       players,
     };
   }

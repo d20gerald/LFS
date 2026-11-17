@@ -23,6 +23,7 @@ interface Calls {
   reply: Payload[];
   followUp: Payload[];
   update: Payload[];
+  editReply: Payload[];
 }
 
 function fakeCommand(opts: {
@@ -33,7 +34,7 @@ function fakeCommand(opts: {
   ints?: Record<string, number | null>;
   sub?: string;
 } = {}) {
-  const calls: Calls = { reply: [], followUp: [], update: [] };
+  const calls: Calls = { reply: [], followUp: [], update: [], editReply: [] };
   const guildId = opts.guildId === undefined ? "g" : opts.guildId;
   const interaction = {
     guildId,
@@ -57,13 +58,16 @@ function fakeCommand(opts: {
 }
 
 function fakeButton(customId: string, userId: string, opts: { manageMessages?: boolean } = {}) {
-  const calls: Calls = { reply: [], followUp: [], update: [] };
+  const calls: Calls = { reply: [], followUp: [], update: [], editReply: [] };
   const interaction = {
     customId,
     user: { id: userId },
     memberPermissions: { has: () => opts.manageMessages ?? false },
     reply: async (payload: Payload) => {
       calls.reply.push(payload);
+    },
+    editReply: async (payload: Payload) => {
+      calls.editReply.push(payload);
     },
     followUp: async (payload: Payload) => {
       calls.followUp.push(payload);
@@ -75,7 +79,77 @@ function fakeButton(customId: string, userId: string, opts: { manageMessages?: b
   return { interaction: interaction as unknown as ButtonInteraction, calls };
 }
 
-function fakeClient() {
+/** A guild fake that records voice-channel traffic: creations, overwrite updates and deletions. */
+interface Overwrite {
+  id: string;
+  allow?: bigint[];
+  deny?: bigint[];
+}
+interface FakeGuildChannel {
+  id: string;
+  name: string;
+  type: number;
+  parent: string | null;
+  userLimit?: number;
+  overwrites: Overwrite[];
+  deleted: boolean;
+}
+function fakeGuild(opts: { botPermissions?: boolean; categories?: Array<{ id: string; name: string }> } = {}) {
+  const channels = new Map<string, FakeGuildChannel>();
+  const CATEGORY = 4;
+  const VOICE = 2;
+  for (const c of opts.categories ?? []) {
+    channels.set(c.id, { id: c.id, name: c.name, type: CATEGORY, parent: null, overwrites: [], deleted: false });
+  }
+  let nextId = 100;
+  const wrap = (c: FakeGuildChannel) => ({
+    id: c.id,
+    name: c.name,
+    type: c.type,
+    permissionOverwrites: {
+      set: async (overwrites: Overwrite[]) => {
+        c.overwrites = overwrites;
+      },
+    },
+    delete: async () => {
+      c.deleted = true;
+      channels.delete(c.id);
+    },
+  });
+  const guild = {
+    id: "g",
+    members: { fetchMe: async () => ({ id: "bot", permissions: { has: () => opts.botPermissions ?? true } }) },
+    channels: {
+      fetch: async (id?: string) => {
+        if (id === undefined) return new Map([...channels].map(([k, v]) => [k, wrap(v)]));
+        const c = channels.get(id);
+        if (!c) throw new Error("Unknown Channel");
+        return wrap(c);
+      },
+      create: async (o: { name: string; type: number; parent?: string | null; userLimit?: number; permissionOverwrites?: Overwrite[] }) => {
+        const c: FakeGuildChannel = {
+          id: `ch-${nextId++}`,
+          name: o.name,
+          type: o.type,
+          parent: o.parent ?? null,
+          overwrites: o.permissionOverwrites ?? [],
+          deleted: false,
+          ...(o.userLimit !== undefined ? { userLimit: o.userLimit } : {}),
+        };
+        channels.set(c.id, c);
+        return wrap(c);
+      },
+    },
+  };
+  return {
+    guild,
+    channels,
+    voiceRooms: () => [...channels.values()].filter((c) => c.type === VOICE),
+    categories: () => [...channels.values()].filter((c) => c.type === CATEGORY),
+  };
+}
+
+function fakeClient(guildOpts?: Parameters<typeof fakeGuild>[0]) {
   const sent: Payload[] = [];
   const edits: Payload[] = [];
   const message = {
@@ -91,12 +165,16 @@ function fakeClient() {
       sent.push(payload);
     },
   };
-  const client = { channels: { fetch: async () => channel } } as unknown as Client;
-  return { client, sent, edits };
+  const g = fakeGuild(guildOpts);
+  const client = {
+    channels: { fetch: async () => channel },
+    guilds: { fetch: async () => g.guild },
+  } as unknown as Client;
+  return { client, sent, edits, guild: g };
 }
 
-function makeContext(overrides: Partial<Config> = {}) {
-  const { client, sent, edits } = fakeClient();
+function makeContext(overrides: Partial<Config> = {}, guildOpts?: Parameters<typeof fakeGuild>[0]) {
+  const { client, sent, edits, guild } = fakeClient(guildOpts);
   const store = new LobbyStore(":memory:");
   const config: Config = {
     token: "t",
@@ -105,11 +183,14 @@ function makeContext(overrides: Partial<Config> = {}) {
     allowedChannelIds: new Set(),
     lobbyTtlMs: 90 * 60_000,
     dbPath: ":memory:",
+    voiceRooms: true,
+    voiceCategoryId: null,
+    voiceCategoryName: "LFS Voice",
     ...overrides,
   };
   let now = NOW;
   const ctx: Context = { client, store, config, now: () => now };
-  return { ctx, store, sent, edits, setNow: (t: number) => (now = t) };
+  return { ctx, store, sent, edits, guild, setNow: (t: number) => (now = t) };
 }
 
 const BASE_STRINGS = { server: "OFFE", vibe: "casual" };
@@ -197,7 +278,10 @@ describe("buttons", () => {
     expect(btn.calls.followUp[0]!.content).toContain("`OFFE`");
     expect(JSON.stringify(btn.calls.update[0]!.embeds)).toContain("Crew (2/3)");
     expect(t.store.getLobby(lobby.id)?.players).toEqual(["host", "a"]);
-    expect(btn.calls.followUp).toHaveLength(1);
+    // Two follow-ups: the private server details, then the public "comms are open" note.
+    expect(btn.calls.followUp).toHaveLength(2);
+    expect(btn.calls.followUp[0]!.flags).toBe(64);
+    expect(btn.calls.followUp[1]!.flags).toBeUndefined();
   });
 
   it("pings the host and crew when the last seat fills", async () => {
@@ -314,6 +398,129 @@ describe("expiry sweep", () => {
     expect(buttonsDisabled(t.edits[0]!)).toEqual([true, true, true, true]);
 
     expect(await sweepExpiredLobbies(t.ctx)).toBe(0);
+  });
+});
+
+describe("crew voice rooms", () => {
+  const VOICE = 2;
+  const allowedIds = (overwrites: Overwrite[]) => overwrites.filter((o) => (o.allow?.length ?? 0) > 0).map((o) => o.id);
+
+  it("opens a crew-only room under a fresh LFS Voice category when the first crewmate joins", async () => {
+    const t = makeContext();
+    const lobby = (await postLobby(t.ctx)).lobby!;
+    expect(t.guild.voiceRooms()).toHaveLength(0);
+
+    const btn = fakeButton(buttonId("join", lobby.id), "a");
+    await handleButton(t.ctx, btn.interaction);
+
+    const rooms = t.guild.voiceRooms();
+    expect(rooms).toHaveLength(1);
+    const room = rooms[0]!;
+    expect(room.name).toBe(`LFS Crew #${lobby.id}`);
+    expect(room.userLimit).toBe(3);
+    expect(t.guild.categories().map((c) => c.name)).toEqual(["LFS Voice"]);
+    expect(room.parent).toBe(t.guild.categories()[0]!.id);
+    expect(room.overwrites.find((o) => o.id === "g")?.deny?.length).toBeGreaterThan(0);
+    expect(allowedIds(room.overwrites)).toEqual(["bot", "host", "a"]);
+
+    expect(t.store.getLobby(lobby.id)?.voiceChannelId).toBe(room.id);
+    expect(JSON.stringify(btn.calls.editReply[0]!.embeds)).toContain(`<#${room.id}>`);
+    expect(btn.calls.followUp[0]!.content).toContain(`Voice chat: <#${room.id}>`);
+    const note = btn.calls.followUp[1]!;
+    expect(note.content).toContain(`<@host> comms are open: <#${room.id}>`);
+    expect(note.allowedMentions).toEqual({ users: ["host"] });
+    expect(note.flags).toBeUndefined();
+  });
+
+  it("reuses an existing category and keeps the room's member list in step with the crew", async () => {
+    const t = makeContext({}, { categories: [{ id: "cat-1", name: "lfs voice" }] });
+    const lobby = (await postLobby(t.ctx)).lobby!;
+    await handleButton(t.ctx, fakeButton(buttonId("join", lobby.id), "a").interaction);
+    const room = t.guild.voiceRooms()[0]!;
+    expect(room.parent).toBe("cat-1");
+    expect(t.guild.categories()).toHaveLength(1);
+
+    const last = fakeButton(buttonId("join", lobby.id), "b");
+    await handleButton(t.ctx, last.interaction);
+    expect(t.guild.voiceRooms()).toHaveLength(1);
+    expect(allowedIds(room.overwrites)).toEqual(["bot", "host", "a", "b"]);
+    expect(last.calls.followUp[1]!.content).toContain(`Comms are open in <#${room.id}>`);
+    expect(last.calls.followUp).toHaveLength(2);
+
+    await handleButton(t.ctx, fakeButton(buttonId("leave", lobby.id), "a").interaction);
+    expect(allowedIds(room.overwrites)).toEqual(["bot", "host", "b"]);
+    expect(t.guild.voiceRooms()).toHaveLength(1);
+  });
+
+  it("honors an explicit category id", async () => {
+    const t = makeContext({ voiceCategoryId: "cat-9" }, { categories: [{ id: "cat-9", name: "Whatever" }] });
+    const lobby = (await postLobby(t.ctx)).lobby!;
+    await handleButton(t.ctx, fakeButton(buttonId("join", lobby.id), "a").interaction);
+    expect(t.guild.voiceRooms()[0]!.parent).toBe("cat-9");
+    expect(t.guild.categories()).toHaveLength(1);
+  });
+
+  it("deletes the room when the host closes the lobby", async () => {
+    const t = makeContext();
+    const lobby = (await postLobby(t.ctx)).lobby!;
+    await handleButton(t.ctx, fakeButton(buttonId("join", lobby.id), "a").interaction);
+    const room = t.guild.voiceRooms()[0]!;
+    await handleButton(t.ctx, fakeButton(buttonId("close", lobby.id), "host").interaction);
+    expect(room.deleted).toBe(true);
+    expect(t.guild.voiceRooms()).toHaveLength(0);
+    expect(t.store.getLobby(lobby.id)?.voiceChannelId).toBeNull();
+  });
+
+  it("deletes the room when the lobby expires", async () => {
+    const t = makeContext({ lobbyTtlMs: 1000 });
+    const lobby = (await postLobby(t.ctx)).lobby!;
+    await handleButton(t.ctx, fakeButton(buttonId("join", lobby.id), "a").interaction);
+    expect(t.guild.voiceRooms()).toHaveLength(1);
+    t.setNow(NOW + 1000);
+    await sweepExpiredLobbies(t.ctx);
+    expect(t.guild.voiceRooms()).toHaveLength(0);
+    expect(t.store.getLobby(lobby.id)?.voiceChannelId).toBeNull();
+  });
+
+  it("makes a new room if someone deleted the old one by hand", async () => {
+    const t = makeContext();
+    const lobby = (await postLobby(t.ctx)).lobby!;
+    await handleButton(t.ctx, fakeButton(buttonId("join", lobby.id), "a").interaction);
+    const first = t.guild.voiceRooms()[0]!;
+    t.guild.channels.delete(first.id);
+
+    await handleButton(t.ctx, fakeButton(buttonId("join", lobby.id), "b").interaction);
+    const rooms = t.guild.voiceRooms();
+    expect(rooms).toHaveLength(1);
+    expect(rooms[0]!.id).not.toBe(first.id);
+    expect(t.store.getLobby(lobby.id)?.voiceChannelId).toBe(rooms[0]!.id);
+  });
+
+  it("carries on without a room when the bot lacks permissions", async () => {
+    const t = makeContext({}, { botPermissions: false });
+    const lobby = (await postLobby(t.ctx)).lobby!;
+    const btn = fakeButton(buttonId("join", lobby.id), "a");
+    await handleButton(t.ctx, btn.interaction);
+    expect(t.guild.voiceRooms()).toHaveLength(0);
+    expect(t.store.getLobby(lobby.id)).toMatchObject({ players: ["host", "a"], voiceChannelId: null });
+    expect(btn.calls.editReply).toHaveLength(0);
+    expect(btn.calls.followUp).toHaveLength(1);
+    expect(btn.calls.followUp[0]!.content).not.toContain("Voice chat");
+  });
+
+  it("stays off when LFS_VOICE_ROOMS is off", async () => {
+    const t = makeContext({ voiceRooms: false });
+    const lobby = (await postLobby(t.ctx)).lobby!;
+    await handleButton(t.ctx, fakeButton(buttonId("join", lobby.id), "a").interaction);
+    expect(t.guild.voiceRooms()).toHaveLength(0);
+    expect(t.guild.categories()).toHaveLength(0);
+  });
+
+  it("does not create a room for a lonely host", async () => {
+    const t = makeContext();
+    await postLobby(t.ctx);
+    expect(t.guild.voiceRooms()).toHaveLength(0);
+    expect(t.guild.voiceRooms().filter((r) => r.type === VOICE)).toHaveLength(0);
   });
 });
 

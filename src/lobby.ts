@@ -47,6 +47,8 @@ export interface Lobby {
   createdAt: number;
   expiresAt: number;
   closedAt: number | null;
+  /** The crew's private voice channel, once one exists. */
+  voiceChannelId: string | null;
   /** Discord user IDs in join order. The host is always first. */
   players: string[];
 }

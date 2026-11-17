@@ -33,6 +33,7 @@ function makeLobby(overrides: Partial<Lobby> = {}): Lobby {
     createdAt: NOW,
     expiresAt: NOW + 60_000,
     closedAt: null,
+    voiceChannelId: null,
     players: ["host"],
     ...overrides,
   };
