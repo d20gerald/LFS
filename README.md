@@ -12,7 +12,7 @@ Inspired by [SpellBot](https://github.com/lexicalunit/spellbot), minus the Magic
 4. Crewmates click **Join** and receive the server name and password in a private reply only they can see.
 5. The moment the first crewmate is aboard, LFS opens a private voice channel for the crew under an **LFS Voice** category. Only the host and crew can see or join it, and it is deleted when the lobby closes or expires.
 6. When the last seat fills, LFS pings the host and crew in the channel. Sol Mates supports drop-in, so the host can start playing right away.
-7. Lobbies the host does not close expire on their own (90 minutes by default).
+7. Lobbies the host does not close expire on their own: 90 minutes for an unfilled lobby, and 4 hours from the moment the last seat fills, so a full crew's voice room does not vanish mid-run. Both are configurable.
 
 `/lfs lobbies` lists the open lobbies on the server. `/lfs about` explains the bot.
 
@@ -78,7 +78,7 @@ The lobby rules live in `src/lobby.ts` and the embed rendering in `src/render.ts
 
 - LFS cannot see inside the game. Seat counts are honor-system bookkeeping, and the Juice level is what the host declared, not what the Space Bar is set to.
 - Anyone who joins can share the server details. A password is the only real lock, so LFS nudges hosts to set one.
-- Voice rooms are deleted when the lobby closes or expires, not when they empty. A crew still talking when the lobby hits its expiry loses the room, so raise `LFS_LOBBY_TTL_MINUTES` if sessions regularly run longer than 90 minutes.
+- Voice rooms are deleted when the lobby closes or expires, not when they empty. A full lobby lives 4 hours by default (`LFS_FULL_LOBBY_TTL_MINUTES`); raise it if marathon sessions are the norm.
 
 ## License
 

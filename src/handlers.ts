@@ -212,7 +212,7 @@ export async function handleButton(ctx: Context, interaction: ButtonInteraction)
           });
           return;
         }
-        const result = tryJoin(lobby, userId);
+        const result = tryJoin(lobby, userId, { now, fullTtlMs: ctx.config.fullLobbyTtlMs });
         if (result.kind === "joined") {
           ctx.store.savePlayersAndStatus(result.lobby, now);
           // Acknowledge first: Discord gives us three seconds, and making a voice channel may use them.

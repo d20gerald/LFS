@@ -87,6 +87,26 @@ describe("validateLobbyInput", () => {
   });
 });
 
+describe("tryJoin timing", () => {
+  it("pushes expiry out when the lobby fills, never earlier", () => {
+    const lobby = makeLobby({ seats: 2, players: ["host"], expiresAt: 1000 });
+    const r = tryJoin(lobby, "a", { now: 500, fullTtlMs: 2000 });
+    if (r.kind !== "joined") throw new Error("expected join");
+    expect(r.nowFull).toBe(true);
+    expect(r.lobby.expiresAt).toBe(2500);
+
+    const late = makeLobby({ seats: 2, players: ["host"], expiresAt: 9000 });
+    const r2 = tryJoin(late, "a", { now: 500, fullTtlMs: 2000 });
+    if (r2.kind !== "joined") throw new Error("expected join");
+    expect(r2.lobby.expiresAt).toBe(9000);
+
+    const notFull = makeLobby({ seats: 3, players: ["host"], expiresAt: 1000 });
+    const r3 = tryJoin(notFull, "a", { now: 500, fullTtlMs: 2000 });
+    if (r3.kind !== "joined") throw new Error("expected join");
+    expect(r3.lobby.expiresAt).toBe(1000);
+  });
+});
+
 describe("tryJoin", () => {
   it("adds a player and stays open while seats remain", () => {
     const result = tryJoin(makeLobby(), "a");

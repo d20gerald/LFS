@@ -6,6 +6,8 @@ export interface Config {
   guildId: string | null;
   allowedChannelIds: Set<string>;
   lobbyTtlMs: number;
+  /** How long a full lobby (and its voice room) lives after the last seat fills. */
+  fullLobbyTtlMs: number;
   dbPath: string;
   /** Create a private voice channel per crew. Needs Manage Channels and Manage Roles. */
   voiceRooms: boolean;
@@ -36,6 +38,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   if (!Number.isFinite(ttlMinutes) || ttlMinutes <= 0) {
     throw new Error("LFS_LOBBY_TTL_MINUTES must be a positive number.");
   }
+  const fullTtlMinutes = Number(env.LFS_FULL_LOBBY_TTL_MINUTES ?? "240");
+  if (!Number.isFinite(fullTtlMinutes) || fullTtlMinutes <= 0) {
+    throw new Error("LFS_FULL_LOBBY_TTL_MINUTES must be a positive number.");
+  }
   const channels = (env.LFS_CHANNEL_IDS ?? "")
     .split(",")
     .map((s) => s.trim())
@@ -46,6 +52,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     guildId: env.DISCORD_GUILD_ID?.trim() || null,
     allowedChannelIds: new Set(channels),
     lobbyTtlMs: ttlMinutes * 60_000,
+    fullLobbyTtlMs: fullTtlMinutes * 60_000,
     dbPath: env.LFS_DB_PATH?.trim() || "./data/lfs.sqlite",
     voiceRooms: flag(env.LFS_VOICE_ROOMS, true),
     voiceCategoryId: env.LFS_VOICE_CATEGORY_ID?.trim() || null,

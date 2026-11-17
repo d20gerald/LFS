@@ -182,6 +182,7 @@ function makeContext(overrides: Partial<Config> = {}, guildOpts?: Parameters<typ
     guildId: null,
     allowedChannelIds: new Set(),
     lobbyTtlMs: 90 * 60_000,
+    fullLobbyTtlMs: 240 * 60_000,
     dbPath: ":memory:",
     voiceRooms: true,
     voiceCategoryId: null,
@@ -381,6 +382,27 @@ describe("buttons", () => {
     const foreign = fakeButton("otherbot:thing:1", "a");
     await handleButton(t.ctx, foreign.interaction);
     expect(foreign.calls.reply).toHaveLength(0);
+  });
+});
+
+describe("full lobby lifetime", () => {
+  it("extends expiry when the last seat fills so the crew keeps its room", async () => {
+    const t = makeContext({ lobbyTtlMs: 1000, fullLobbyTtlMs: 5000 });
+    const lobby = (await postLobby(t.ctx)).lobby!;
+    await handleButton(t.ctx, fakeButton(buttonId("join", lobby.id), "a").interaction);
+    expect(t.store.getLobby(lobby.id)?.expiresAt).toBe(NOW + 1000);
+
+    t.setNow(NOW + 500);
+    await handleButton(t.ctx, fakeButton(buttonId("join", lobby.id), "b").interaction);
+    expect(t.store.getLobby(lobby.id)?.expiresAt).toBe(NOW + 500 + 5000);
+
+    t.setNow(NOW + 1000);
+    expect(await sweepExpiredLobbies(t.ctx)).toBe(0);
+    expect(t.guild.voiceRooms()).toHaveLength(1);
+
+    t.setNow(NOW + 500 + 5000);
+    expect(await sweepExpiredLobbies(t.ctx)).toBe(1);
+    expect(t.guild.voiceRooms()).toHaveLength(0);
   });
 });
 

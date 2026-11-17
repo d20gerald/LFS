@@ -150,16 +150,23 @@ export type JoinResult =
   | { kind: "full" }
   | { kind: "not-open" };
 
-export function tryJoin(lobby: Lobby, userId: string): JoinResult {
+/**
+ * Seat a player. When the last seat fills, the lobby's expiry is pushed out to `now + fullTtlMs`
+ * (never earlier than it already was): a full crew is playing, not waiting, and the voice room
+ * should not vanish mid-run.
+ */
+export function tryJoin(lobby: Lobby, userId: string, timing?: { now: number; fullTtlMs: number }): JoinResult {
   if (!isActive(lobby)) return { kind: "not-open" };
   if (isMember(lobby, userId)) return { kind: "already-in" };
   if (openSeats(lobby) === 0) return { kind: "full" };
   const players = [...lobby.players, userId];
   const nowFull = players.length >= lobby.seats;
+  const expiresAt =
+    nowFull && timing ? Math.max(lobby.expiresAt, timing.now + timing.fullTtlMs) : lobby.expiresAt;
   return {
     kind: "joined",
     nowFull,
-    lobby: { ...lobby, players, status: nowFull ? "full" : "open" },
+    lobby: { ...lobby, players, status: nowFull ? "full" : "open", expiresAt },
   };
 }
 

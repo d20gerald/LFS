@@ -157,8 +157,8 @@ export class LobbyStore {
       );
       lobby.players.forEach((userId, position) => insert.run(lobby.id, userId, position, now));
       this.db
-        .prepare("UPDATE lobbies SET status = ?, closed_at = ? WHERE id = ?")
-        .run(lobby.status, lobby.closedAt, lobby.id);
+        .prepare("UPDATE lobbies SET status = ?, closed_at = ?, expires_at = ? WHERE id = ?")
+        .run(lobby.status, lobby.closedAt, lobby.expiresAt, lobby.id);
       this.db.exec("COMMIT");
     } catch (error) {
       this.db.exec("ROLLBACK");

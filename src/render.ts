@@ -46,7 +46,7 @@ function statusLine(lobby: Lobby): string {
       return `🟢 **Open.** ${seats} ${word} left. Expires ${discordRelative(lobby.expiresAt)}.`;
     }
     case "full":
-      return "🔵 **Crew complete.** The host has been pinged. Launch when ready!";
+      return `🔵 **Crew complete.** The host has been pinged. Launch when ready! Expires ${discordRelative(lobby.expiresAt)}.`;
     case "closed":
       return "⚫ **Closed** by the host.";
     case "expired":
