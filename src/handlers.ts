@@ -129,7 +129,7 @@ export async function handleLobbyCommand(ctx: Context, interaction: ChatInputCom
         : lobby.vibe === "tryhard"
           ? "⚠️ No password set. For a try-hard run, consider setting one in the Host screen so nobody wanders aboard uninvited."
           : "Tip: a server password keeps drive-by joiners out. Set one in the Host screen if you want.",
-      "You'll get pinged here when the crew is complete. Hang tight at the Space Bar.",
+      "Go ahead and play. Crewmates can drop in mid-mission, and you'll get pinged here when the crew is complete.",
     ]
       .filter(Boolean)
       .join("\n"),

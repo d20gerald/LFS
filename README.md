@@ -10,7 +10,7 @@ Inspired by [SpellBot](https://github.com/lexicalunit/spellbot), minus the Magic
 2. In Discord, run `/lobby` with that server name, your vibe (casual or try-hard), crew size (2 to 4, you included), Juice level (0 to 13) and region.
 3. LFS posts an embed with **Join**, **Leave**, **Show server details** and **Close** buttons. The server name and password are hidden from the public post.
 4. Crewmates click **Join** and receive the server name and password in a private reply only they can see.
-5. When the last seat fills, LFS pings the host and crew in the channel. Launch when ready.
+5. When the last seat fills, LFS pings the host and crew in the channel. Sol Mates supports drop-in, so the host can start playing right away.
 6. Lobbies the host does not close expire on their own (90 minutes by default).
 
 `/lfs lobbies` lists the open lobbies on the server. `/lfs about` explains the bot.

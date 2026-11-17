@@ -69,7 +69,7 @@ export function buildLobbyEmbed(lobby: Lobby): APIEmbed {
         statusLine(lobby),
         "",
         isActive(lobby)
-          ? "Hit **Join** to get the server name and password. The host is waiting at the Space Bar."
+          ? "Hit **Join** to get the server name and password. Drop-in works even if the run is already underway."
           : "",
       ]
         .join("\n")
@@ -124,7 +124,7 @@ export function renderServerDetails(lobby: Lobby): string {
     `**Server name:** \`${lobby.serverName}\``,
     lobby.password ? `**Password:** \`${lobby.password}\`` : "**Password:** none",
     "",
-    "In Sol Mates: **Play → Join**, enter the name (and password), and you're aboard.",
+    "In Sol Mates: **Play → Join**, enter the name (and password), and you're aboard. You can drop in mid-mission.",
     `Host: ${mention(lobby.hostId)}. ${vibeLabel(lobby.vibe)} · ${juiceLabel(lobby.juice)} · ${regionLabel(lobby.region)}`,
   ];
   return lines.join("\n");
