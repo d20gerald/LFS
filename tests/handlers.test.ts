@@ -197,7 +197,7 @@ describe("buttons", () => {
     expect(btn.calls.followUp[0]!.content).toContain("`OFFE`");
     expect(JSON.stringify(btn.calls.update[0]!.embeds)).toContain("Crew (2/3)");
     expect(t.store.getLobby(lobby.id)?.players).toEqual(["host", "a"]);
-    expect(t.sent).toHaveLength(0);
+    expect(btn.calls.followUp).toHaveLength(1);
   });
 
   it("pings the host and crew when the last seat fills", async () => {
@@ -205,8 +205,10 @@ describe("buttons", () => {
     const last = fakeButton(buttonId("join", lobby.id), "b");
     await handleButton(t.ctx, last.interaction);
     expect(t.store.getLobby(lobby.id)?.status).toBe("full");
-    expect(t.sent).toHaveLength(1);
-    expect(t.sent[0]!.content).toContain("<@host> your crew is complete: <@a>, <@b>");
+    const announcement = last.calls.followUp[1]!;
+    expect(announcement.content).toContain("<@host> your crew is complete: <@a>, <@b>");
+    expect(announcement.flags).toBeUndefined();
+    expect(announcement.allowedMentions).toEqual({ users: ["host", "a", "b"] });
     expect(buttonsDisabled(last.calls.update[0]!)[0]).toBe(true);
   });
 
@@ -236,7 +238,8 @@ describe("buttons", () => {
     expect(final.status).toBe("full");
     const loser = final.players.includes("b") ? c : b;
     expect(loser.calls.followUp[0]!.content).toContain("filled up");
-    expect(t.sent).toHaveLength(1);
+    const announcements = [...b.calls.followUp, ...c.calls.followUp].filter((f) => f.content?.includes("crew is complete"));
+    expect(announcements).toHaveLength(1);
   });
 
   it("leave reopens a full lobby, and the host is told to close instead", async () => {

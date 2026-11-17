@@ -56,17 +56,6 @@ export async function refreshLobbyPost(ctx: Context, lobby: Lobby): Promise<void
   }
 }
 
-async function announceCrewComplete(ctx: Context, lobby: Lobby): Promise<void> {
-  try {
-    const channel = await ctx.client.channels.fetch(lobby.channelId);
-    if (!channel || !channel.isSendable()) return;
-    const { content, userIds } = renderCrewCompleteMessage(lobby);
-    await channel.send({ content, allowedMentions: { users: userIds } });
-  } catch (error) {
-    console.warn(`Could not announce crew for lobby #${lobby.id}:`, (error as Error).message);
-  }
-}
-
 export async function handleLobbyCommand(ctx: Context, interaction: ChatInputCommandInteraction): Promise<void> {
   if (!interaction.inGuild() || !interaction.guildId) {
     await interaction.reply({ ...EPHEMERAL, content: "LFS only works inside a server, not in DMs." });
@@ -200,7 +189,12 @@ export async function handleButton(ctx: Context, interaction: ButtonInteraction)
           ctx.store.savePlayersAndStatus(result.lobby, now);
           await interaction.update(lobbyMessagePayload(result.lobby));
           await interaction.followUp({ ...EPHEMERAL, content: `You're in! 🚀\n${renderServerDetails(result.lobby)}` });
-          if (result.nowFull) await announceCrewComplete(ctx, result.lobby);
+          if (result.nowFull) {
+            // A public follow-up on the joiner's interaction. Unlike channel.send, this works in
+            // threads and channels regardless of the bot's own permissions there.
+            const { content, userIds } = renderCrewCompleteMessage(result.lobby);
+            await interaction.followUp({ content, allowedMentions: { users: userIds } });
+          }
         } else if (result.kind === "already-in") {
           await interaction.reply({ ...EPHEMERAL, content: `You're already aboard.\n${renderServerDetails(lobby)}` });
         } else if (result.kind === "full") {

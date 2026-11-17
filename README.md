@@ -24,12 +24,12 @@ One lobby per person at a time: you cannot host or join a second lobby until you
 1. Go to the [Discord Developer Portal](https://discord.com/developers/applications) and click **New Application**. Name it LFS.
 2. Under **Bot**, click **Reset Token** and copy the token. This is `DISCORD_TOKEN`. No privileged intents are needed.
 3. Under **General Information**, copy the **Application ID**. This is `DISCORD_CLIENT_ID`.
-4. Under **OAuth2 → URL Generator**, tick the scopes `bot` and `applications.commands`, then the bot permissions **View Channels**, **Send Messages**, **Embed Links** and **Read Message History**. Open the generated URL and add the bot to the server. A server admin has to do this step.
+4. Under **OAuth2 → URL Generator**, tick the scopes `bot` and `applications.commands`, then the bot permissions **View Channels**, **Send Messages**, **Send Messages in Threads**, **Embed Links** and **Read Message History**. Open the generated URL and add the bot to the server. A server admin has to do this step.
 
 Or use this URL with your application ID filled in:
 
 ```
-https://discord.com/api/oauth2/authorize?client_id=YOUR_APP_ID&scope=bot%20applications.commands&permissions=84992
+https://discord.com/api/oauth2/authorize?client_id=YOUR_APP_ID&scope=bot%20applications.commands&permissions=274877991936
 ```
 
 ### 2. Configure
