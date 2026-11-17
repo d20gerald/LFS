@@ -22,6 +22,7 @@ function makeLobby(overrides: Partial<Lobby> = {}): Lobby {
     createdAt: NOW,
     expiresAt: NOW + 90 * 60_000,
     closedAt: null,
+    voiceChannelId: null,
     players: ["host", "a"],
     ...overrides,
   };
@@ -32,6 +33,12 @@ function embedText(lobby: Lobby): string {
 }
 
 describe("buildLobbyEmbed", () => {
+  it("shows the voice room only while the lobby is active", () => {
+    expect(embedText(makeLobby({ voiceChannelId: "vc" }))).toContain("<#vc>");
+    expect(embedText(makeLobby({ voiceChannelId: "vc", status: "closed" }))).not.toContain("<#vc>");
+    expect(embedText(makeLobby())).not.toContain("Voice chat");
+  });
+
   it("never leaks the server name or password", () => {
     const text = embedText(makeLobby());
     expect(text).not.toContain("OFFE");

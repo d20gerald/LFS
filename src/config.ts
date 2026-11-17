@@ -7,6 +7,22 @@ export interface Config {
   allowedChannelIds: Set<string>;
   lobbyTtlMs: number;
   dbPath: string;
+  /** Create a private voice channel per crew. Needs Manage Channels and Manage Roles. */
+  voiceRooms: boolean;
+  /** Category ID voice rooms are created under. Null = find or create one by name. */
+  voiceCategoryId: string | null;
+  /** Category name used when no ID is configured. */
+  voiceCategoryName: string;
+}
+
+export const DEFAULT_VOICE_CATEGORY_NAME = "LFS Voice";
+
+function flag(value: string | undefined, fallback: boolean): boolean {
+  const v = value?.trim().toLowerCase();
+  if (!v) return fallback;
+  if (["1", "true", "on", "yes"].includes(v)) return true;
+  if (["0", "false", "off", "no"].includes(v)) return false;
+  throw new Error(`Expected on/off, got "${value}".`);
 }
 
 function required(name: string): string {
@@ -31,5 +47,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     allowedChannelIds: new Set(channels),
     lobbyTtlMs: ttlMinutes * 60_000,
     dbPath: env.LFS_DB_PATH?.trim() || "./data/lfs.sqlite",
+    voiceRooms: flag(env.LFS_VOICE_ROOMS, true),
+    voiceCategoryId: env.LFS_VOICE_CATEGORY_ID?.trim() || null,
+    voiceCategoryName: env.LFS_VOICE_CATEGORY_NAME?.trim() || DEFAULT_VOICE_CATEGORY_NAME,
   };
 }

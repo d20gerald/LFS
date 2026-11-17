@@ -10,8 +10,9 @@ Inspired by [SpellBot](https://github.com/lexicalunit/spellbot), minus the Magic
 2. In Discord, run `/lobby` with that server name, your vibe (casual or try-hard), crew size (2 to 4, you included), Juice level (0 to 13) and region.
 3. LFS posts an embed with **Join**, **Leave**, **Show server details** and **Close** buttons. The server name and password are hidden from the public post.
 4. Crewmates click **Join** and receive the server name and password in a private reply only they can see.
-5. When the last seat fills, LFS pings the host and crew in the channel. Sol Mates supports drop-in, so the host can start playing right away.
-6. Lobbies the host does not close expire on their own (90 minutes by default).
+5. The moment the first crewmate is aboard, LFS opens a private voice channel for the crew under an **LFS Voice** category. Only the host and crew can see or join it, and it is deleted when the lobby closes or expires.
+6. When the last seat fills, LFS pings the host and crew in the channel. Sol Mates supports drop-in, so the host can start playing right away.
+7. Lobbies the host does not close expire on their own (90 minutes by default).
 
 `/lfs lobbies` lists the open lobbies on the server. `/lfs about` explains the bot.
 
@@ -24,13 +25,15 @@ One lobby per person at a time: you cannot host or join a second lobby until you
 1. Go to the [Discord Developer Portal](https://discord.com/developers/applications) and click **New Application**. Name it LFS.
 2. Under **Bot**, click **Reset Token** and copy the token. This is `DISCORD_TOKEN`. No privileged intents are needed.
 3. Under **General Information**, copy the **Application ID**. This is `DISCORD_CLIENT_ID`.
-4. Under **OAuth2 → URL Generator**, tick the scopes `bot` and `applications.commands`, then the bot permissions **View Channels**, **Send Messages**, **Send Messages in Threads**, **Embed Links** and **Read Message History**. Open the generated URL and add the bot to the server. A server admin has to do this step.
+4. Under **OAuth2 → URL Generator**, tick the scopes `bot` and `applications.commands`, then the bot permissions **View Channels**, **Send Messages**, **Send Messages in Threads**, **Embed Links**, **Read Message History**, **Manage Channels**, **Manage Roles**, **Connect** and **Speak**. The last four are for crew voice rooms. Open the generated URL and add the bot to the server. A server admin has to do this step.
 
 Or use this URL with your application ID filled in:
 
 ```
-https://discord.com/api/oauth2/authorize?client_id=YOUR_APP_ID&scope=bot%20applications.commands&permissions=274877991936
+https://discord.com/api/oauth2/authorize?client_id=YOUR_APP_ID&scope=bot%20applications.commands&permissions=275149573136
 ```
+
+If the bot was installed before voice rooms existed, open the same URL again to grant the new permissions. Until then LFS logs a warning and runs lobbies without voice rooms. Set `LFS_VOICE_ROOMS=off` to skip voice rooms on purpose.
 
 ### 2. Configure
 
@@ -39,6 +42,8 @@ cp .env.example .env
 ```
 
 Fill in `DISCORD_TOKEN` and `DISCORD_CLIENT_ID`. Setting `DISCORD_GUILD_ID` to the server's ID makes commands appear instantly instead of waiting up to an hour for global registration. `LFS_CHANNEL_IDS` restricts `/lobby` to specific channels.
+
+Crew voice rooms land under a category named **LFS Voice**, which LFS creates if the server has none. Set `LFS_VOICE_CATEGORY_ID` to use a category you already have, or `LFS_VOICE_CATEGORY_NAME` to change the name it looks for. If the category restricts who can see it, give the bot **View Channel** and **Manage Channels** there too.
 
 ### 3. Run locally
 
@@ -67,12 +72,13 @@ npm test        # tests only
 npm run build   # compile to dist/
 ```
 
-The lobby rules live in `src/lobby.ts` and the embed rendering in `src/render.ts`. Both are pure functions with unit tests. `src/handlers.ts` is the Discord glue. `src/db.ts` is the SQLite store.
+The lobby rules live in `src/lobby.ts` and the embed rendering in `src/render.ts`. Both are pure functions with unit tests. `src/handlers.ts` is the Discord glue, `src/voice.ts` manages crew voice rooms, and `src/db.ts` is the SQLite store.
 
 ## Known limits
 
 - LFS cannot see inside the game. Seat counts are honor-system bookkeeping, and the Juice level is what the host declared, not what the Space Bar is set to.
 - Anyone who joins can share the server details. A password is the only real lock, so LFS nudges hosts to set one.
+- Voice rooms are deleted when the lobby closes or expires, not when they empty. A crew still talking when the lobby hits its expiry loses the room, so raise `LFS_LOBBY_TTL_MINUTES` if sessions regularly run longer than 90 minutes.
 
 ## License
 

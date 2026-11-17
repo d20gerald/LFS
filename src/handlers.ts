@@ -28,7 +28,9 @@ import {
   jumpLink,
   renderCrewCompleteMessage,
   renderServerDetails,
+  renderVoiceRoomOpenedMessage,
 } from "./render.js";
+import { createVoiceRoom, deleteVoiceRoom, syncVoiceRoom } from "./voice.js";
 
 export interface Context {
   client: Client;
@@ -41,6 +43,31 @@ const EPHEMERAL = { flags: MessageFlags.Ephemeral } as const;
 
 function lobbyMessagePayload(lobby: Lobby) {
   return { embeds: [buildLobbyEmbed(lobby)], components: buildLobbyButtons(lobby) };
+}
+
+/**
+ * Make sure a crew of two or more has a voice room and that only the current crew can use it.
+ * Returns the lobby with its (possibly new) voice channel, and whether a room was just created.
+ */
+async function ensureVoiceRoom(ctx: Context, lobby: Lobby): Promise<{ lobby: Lobby; created: boolean }> {
+  if (!ctx.config.voiceRooms || lobby.players.length < 2) return { lobby, created: false };
+  if (lobby.voiceChannelId) {
+    const stillThere = await syncVoiceRoom(ctx, lobby);
+    if (stillThere) return { lobby, created: false };
+    ctx.store.setVoiceChannelId(lobby.id, null);
+  }
+  const voiceChannelId = await createVoiceRoom(ctx, { ...lobby, voiceChannelId: null });
+  if (!voiceChannelId) return { lobby: { ...lobby, voiceChannelId: null }, created: false };
+  ctx.store.setVoiceChannelId(lobby.id, voiceChannelId);
+  return { lobby: { ...lobby, voiceChannelId }, created: true };
+}
+
+/** Tear down the crew's voice room when a lobby ends. */
+async function retireVoiceRoom(ctx: Context, lobby: Lobby): Promise<Lobby> {
+  if (!lobby.voiceChannelId) return lobby;
+  await deleteVoiceRoom(ctx, lobby);
+  ctx.store.setVoiceChannelId(lobby.id, null);
+  return { ...lobby, voiceChannelId: null };
 }
 
 /** Edit the public lobby post to reflect the lobby's current state. Tolerates a deleted post. */
@@ -135,6 +162,7 @@ export async function handleLfsCommand(ctx: Context, interaction: ChatInputComma
         "1. In Sol Mates, pick **Play → Host**, note the server name, set a password if you like, and hit Host.",
         "2. Run `/lobby` here with that server name, your vibe, crew size, Juice level and region.",
         "3. Crewmates click **Join** to get the server details privately. You get pinged when the ship is full.",
+        "4. Once a crewmate is aboard, LFS opens a private voice room for the crew. It closes with the lobby.",
       ].join("\n"),
     });
     return;
@@ -187,12 +215,21 @@ export async function handleButton(ctx: Context, interaction: ButtonInteraction)
         const result = tryJoin(lobby, userId);
         if (result.kind === "joined") {
           ctx.store.savePlayersAndStatus(result.lobby, now);
+          // Acknowledge first: Discord gives us three seconds, and making a voice channel may use them.
           await interaction.update(lobbyMessagePayload(result.lobby));
-          await interaction.followUp({ ...EPHEMERAL, content: `You're in! 🚀\n${renderServerDetails(result.lobby)}` });
+          const voice = await ensureVoiceRoom(ctx, result.lobby);
+          const joined = voice.lobby;
+          if (joined.voiceChannelId !== result.lobby.voiceChannelId) {
+            await interaction.editReply(lobbyMessagePayload(joined));
+          }
+          await interaction.followUp({ ...EPHEMERAL, content: `You're in! 🚀\n${renderServerDetails(joined)}` });
           if (result.nowFull) {
             // A public follow-up on the joiner's interaction. Unlike channel.send, this works in
             // threads and channels regardless of the bot's own permissions there.
-            const { content, userIds } = renderCrewCompleteMessage(result.lobby);
+            const { content, userIds } = renderCrewCompleteMessage(joined);
+            await interaction.followUp({ content, allowedMentions: { users: userIds } });
+          } else if (voice.created) {
+            const { content, userIds } = renderVoiceRoomOpenedMessage(joined);
             await interaction.followUp({ content, allowedMentions: { users: userIds } });
           }
         } else if (result.kind === "already-in") {
@@ -213,6 +250,11 @@ export async function handleButton(ctx: Context, interaction: ButtonInteraction)
           ctx.store.savePlayersAndStatus(result.lobby, now);
           await interaction.update(lobbyMessagePayload(result.lobby));
           await interaction.followUp({ ...EPHEMERAL, content: "You've left the lobby." });
+          // Revoke the leaver's access to the voice room. The room itself stays until the lobby ends.
+          if (result.lobby.voiceChannelId && !(await syncVoiceRoom(ctx, result.lobby))) {
+            ctx.store.setVoiceChannelId(result.lobby.id, null);
+            await interaction.editReply(lobbyMessagePayload({ ...result.lobby, voiceChannelId: null }));
+          }
         } else if (result.kind === "host-cannot-leave") {
           await interaction.reply({ ...EPHEMERAL, content: "You're the host. Use **Close** to shut the lobby down." });
         } else if (result.kind === "not-in") {
@@ -247,6 +289,7 @@ export async function handleButton(ctx: Context, interaction: ButtonInteraction)
         const closed = close(lobby, now);
         ctx.store.setStatus(closed.id, closed.status, closed.closedAt);
         await interaction.update(lobbyMessagePayload(closed));
+        await retireVoiceRoom(ctx, closed);
         await interaction.followUp({ ...EPHEMERAL, content: `Lobby #${lobby.id} closed. Fly safe.` });
         return;
       }
@@ -265,6 +308,7 @@ export async function sweepExpiredLobbies(ctx: Context): Promise<number> {
       const expired = expire(fresh, now);
       ctx.store.setStatus(expired.id, expired.status, expired.closedAt);
       await refreshLobbyPost(ctx, expired);
+      await retireVoiceRoom(ctx, expired);
     });
   }
   return overdue.length;
