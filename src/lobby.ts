@@ -18,18 +18,16 @@ export const VIBES: ReadonlyArray<{ value: Vibe; label: string }> = [
   { value: "tryhard", label: "🔥 Try-hard" },
 ];
 
-/**
- * Region choices. Sol Mates' Host menu has a region picker; align these
- * labels with the in-game list once the full set is confirmed.
- */
+/** Region choices, matching the Region picker on Sol Mates' Host screen. */
 export const REGIONS: ReadonlyArray<{ value: string; label: string }> = [
   { value: "auto", label: "Automatic" },
-  { value: "na-east", label: "North America (East)" },
-  { value: "na-west", label: "North America (West)" },
-  { value: "sa", label: "South America" },
-  { value: "eu", label: "Europe" },
+  { value: "usa-west", label: "USA, West" },
+  { value: "usa-east", label: "USA, East" },
+  { value: "south-america", label: "South America" },
+  { value: "europe", label: "Europe" },
   { value: "asia", label: "Asia" },
-  { value: "oce", label: "Oceania" },
+  { value: "japan", label: "Japan" },
+  { value: "south-korea", label: "South Korea" },
 ];
 
 export interface Lobby {

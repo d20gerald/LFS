@@ -16,7 +16,7 @@ function makeLobby(overrides: Partial<Lobby> = {}): Lobby {
     vibe: "tryhard",
     seats: 4,
     juice: 13,
-    region: "na-west",
+    region: "usa-west",
     notes: "mic required",
     status: "open",
     createdAt: NOW,
@@ -42,7 +42,7 @@ describe("buildLobbyEmbed", () => {
     const text = embedText(makeLobby());
     expect(text).toContain("Try-hard");
     expect(text).toContain("Juice 13");
-    expect(text).toContain("North America (West)");
+    expect(text).toContain("USA, West");
     expect(text).toContain("Crew (2/4)");
     expect(text).toContain("<@host> (host)");
     expect(text).toContain("<@a>");

@@ -73,7 +73,6 @@ The lobby rules live in `src/lobby.ts` and the embed rendering in `src/render.ts
 
 - LFS cannot see inside the game. Seat counts are honor-system bookkeeping, and the Juice level is what the host declared, not what the Space Bar is set to.
 - Anyone who joins can share the server details. A password is the only real lock, so LFS nudges hosts to set one.
-- The region list in `src/lobby.ts` is a best guess at the in-game options. Adjust it to match Sol Mates' Host screen.
 
 ## License
 

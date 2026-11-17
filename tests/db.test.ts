@@ -9,7 +9,7 @@ const INPUT = {
   vibe: "casual" as const,
   seats: 2,
   juice: 3,
-  region: "eu",
+  region: "europe",
   notes: null,
 };
 
