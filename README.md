@@ -78,3 +78,13 @@ The lobby rules live in `src/lobby.ts` and the embed rendering in `src/render.ts
 ## License
 
 MIT
+
+## Rollout plan
+
+1. Install on the developer Discord first, with `DISCORD_GUILD_ID` set to that server so commands appear instantly, and `LFS_CHANNEL_IDS` pointing at a test channel.
+2. Run a few real lobbies against the demo with volunteers. Fix the region list and any wording that does not match the game.
+3. Install on the public Discord using the same install link. Add the crew-up channel's ID to `LFS_CHANNEL_IDS` (it accepts a comma-separated list, and channel IDs are unique across Discord) and clear `DISCORD_GUILD_ID` so commands register globally.
+
+## Handing the bot to Daruma later
+
+The Discord application can change hands without downtime. In the Developer Portal, the current owner creates a Team under **Teams**, invites a Daruma admin, then uses **Transfer App to Team** on the application. The bot token, server installs and slash commands all stay the same. The new owner then runs the container wherever they like with the same `.env` values.
